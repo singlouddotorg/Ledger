@@ -1,4 +1,4 @@
-# Simple Totals
+# Ledger
 
 **Version 0.1** — new, not yet in wide use.
 
@@ -17,10 +17,10 @@ uses. Nothing to install, no server, no build step.
 |---|---|---|
 | [**Minutes**](https://github.com/singlouddotorg/minutes) | Log a singing as it happens, then turn that log into publishable minutes — with full editing. | Beta |
 | [**Tunebooks**](https://github.com/singlouddotorg/tunebooks) | Curate the shared tunebook data — editions, page indexes, Level 3 scholarly files. | Beta |
-| [**Simple Minutes**](https://github.com/singlouddotorg/Simple-Minutes) | A phone-sized logger: page numbers only, no names. Its files import straight into Minutes, Simple Compile, and Simple Totals. | 1.0 release |
+| [**Simple Minutes**](https://github.com/singlouddotorg/Simple-Minutes) | A phone-sized logger: page numbers only, no names. Its files import straight into Minutes, Simple Compile, and Ledger. | 1.0 release |
 | [**Simple Compile**](https://github.com/singlouddotorg/Simple-Compile) | A one-page, no-editing version of Minutes: open a CSV, get readable minutes back. | 1.0 release |
-| **Simple Totals** | This app. | New (0.1) |
-| [**Tunebook Registry**](https://github.com/singlouddotorg/tunebook-registry) | The published tunebook data the others read. | 1.0 release |
+| **Ledger** | This app. | New (0.1) |
+| [**Tunebook Registry**](https://github.com/singlouddotorg/Tunebook-Registry) | The published tunebook data the others read. | 1.0 release |
 
 ## What It Is For
 
@@ -32,7 +32,7 @@ tally for one singing's own Capture log), but nothing before this combined it ac
 singings without manually pasting rows together in a spreadsheet — a real hassle once
 there are dozens of files, and an easy way to double-count or miss one by hand.
 
-Simple Totals does exactly that one thing: load every finished singing you have, and it
+Ledger does exactly that one thing: load every finished singing you have, and it
 adds them all up.
 
 ## Using It
@@ -52,10 +52,10 @@ adds them all up.
 
 ## Nothing Is Edited, Nothing Is Uploaded
 
-Simple Totals has no editing surface at all — it only reads what's already in each file and
+Ledger has no editing surface at all — it only reads what's already in each file and
 adds it up. Every file is read once, in the browser; nothing is sent anywhere, and nothing
 is written to browser storage between visits. If a name or page genuinely needs correcting
-before it's totaled, do that first in the full [Minutes](https://github.com/singlouddotorg/minutes) app, then load the
+before it's totaled, do that first in the full [Minutes](https://github.com/singlouddotorg/Secretary) app, then load the
 corrected file here.
 
 ## Where the Songbook Data Comes From

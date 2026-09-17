@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simple Totals</title>
+<!-- Kevin's own request, 2026-09-17: some people running a regular singing want a master
+     record across dozens of occurrences - every song sung, how often, by whom, from which
+     book - without hand-merging CSVs in a spreadsheet. This app does exactly that and
+     nothing else: load any number of real Schema 5 Singing Records (a Simple Minutes
+     export, a Simple Compile source file, or a Master CSV from the full Minutes app - they
+     are all the same format), and it produces two things: one combined CSV holding every
+     song row from every singing loaded, and a set of totals (song frequency, by book, by
+     leader) shown on screen and downloadable as their own CSV. No editing surface at all -
+     matches Simple Compile's own "generation only" philosophy, just aggregating across
+     files instead of formatting one file's prose. -->
+<script src="tunebook-library.js"></script>
+<script src="shared-utils.js"></script>
+<script>
+  // Simple Totals' own version - its own repo, own release notes. New tool, not yet used
+  // by anyone but Kevin - starts at 0.1.0 rather than claiming release-ready on day one,
+  // matching how every other app in this suite earned 1.0 only after real use.
+  var SIMPLE_TOTALS_VERSION = "0.1.0";
+</script>
+<script>
+  // Derived from the Tunebook Library rather than loaded directly, matching every other
+  // suite page. Used here only to turn a stored edition code (e.g. "SHM1991") back into a
+  // real display name ("Sacred Harp '91") for the By Book totals - the CSV itself stores
+  // the code, not the name, in both the Book and Edition Code columns.
+  var EZ_MINUTES_TUNEBOOKS = (typeof EZ_MINUTES_TUNEBOOK_LIBRARY !== "undefined" && typeof EZMinutesShared !== "undefined")
+    ? EZMinutesShared.buildTunebookIndexFromLibrary(EZ_MINUTES_TUNEBOOK_LIBRARY)
+    : { books: {} };
+</script>
+<style>
+  :root{
+    /* Same palette as the rest of the suite. */
+    --paper:#fffdf8;
+    --paper-dark:#f6f0e2;
+    --paper-line:#e1d5b8;
+    --ink:#241f1a;
+    --ink-soft:#6b5f4d;
+    --ink-faint:#a89a80;
+    --oxblood:#8a2e2e;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --serif: 'Spectral', Georgia, serif;
+  }
+  *{box-sizing:border-box;}
+  html, body{ margin:0; padding:0; background:var(--paper-dark); color:var(--ink); font-family:var(--sans); }
+  body{ min-height:100vh; padding-bottom:40px; }
+  .wrap{ max-width:820px; margin:0 auto; padding:20px 16px 40px; }
+
+  header.page-head{ margin-bottom:22px; }
+  .suite-brand{ display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+  .suite-brand .shapes{ display:flex; gap:5px; }
+  .suite-brand h1{ font-family:var(--serif); font-weight:600; font-size:20px; letter-spacing:.01em; margin:0; color:var(--ink); }
+  .tagline{ color:var(--ink-soft); font-size:14px; line-height:1.55; margin:0 0 4px; max-width:640px; }
+  .backlink{ color:var(--ink-faint); font-size:12.5px; line-height:1.5; margin:8px 0 0; max-width:640px; }
+  .backlink a{ color:var(--ink-soft); }
+
+  .card{ background:var(--paper); border:1px solid var(--paper-line); border-radius:12px; padding:18px 20px; margin-bottom:16px; }
+  .card-title{ font-family:var(--serif); font-weight:600; font-size:16px; margin:0 0 10px; color:var(--oxblood); }
+  .card-desc{ color:var(--ink-soft); font-size:13px; margin:0 0 14px; max-width:640px; line-height:1.5; }
+
+  .file-drop{
+    border:2px dashed var(--paper-line); border-radius:10px; padding:22px; text-align:center;
+    cursor:pointer; position:relative; background:var(--paper-dark); margin-bottom:10px;
+  }
+  .file-drop.drag{ border-color:var(--oxblood); background:#fbeeee; }
+  .file-drop p{ margin:0; color:var(--ink-soft); font-size:14px; }
+  .file-drop input[type=file]{ position:absolute; inset:0; opacity:0; cursor:pointer; }
+
+  table.loaded{ width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+  table.loaded th, table.loaded td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--paper-line); vertical-align:top; }
+  table.loaded th{ color:var(--ink-soft); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.03em; }
+  table.loaded td.num{ text-align:right; font-family:'Roboto Mono',monospace; }
+  .row-dup{ background:#fbf2d9; }
+  .dup-note{ color:var(--oxblood); font-size:12px; }
+  .remove-btn{
+    background:none; border:1px solid var(--paper-line); border-radius:5px; color:var(--ink-soft);
+    font-size:11px; padding:2px 8px; cursor:pointer;
+  }
+  .remove-btn:hover{ border-color:var(--oxblood); color:var(--oxblood); }
+  .add-anyway-btn{
+    background:none; border:none; color:var(--oxblood); font-size:12px; text-decoration:underline;
+    cursor:pointer; padding:0; margin-left:6px;
+  }
+
+  .overview-grid{ display:flex; gap:22px; flex-wrap:wrap; margin:6px 0 4px; }
+  .stat{ min-width:110px; }
+  .stat .n{ font-family:var(--serif); font-size:26px; font-weight:600; color:var(--oxblood); line-height:1.1; }
+  .stat .lbl{ font-size:11.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; }
+
+  .tally-tabs{ display:flex; gap:6px; margin:14px 0 12px; flex-wrap:wrap; }
+  .tally-tab{
+    font-size:12.5px; font-weight:600; padding:6px 12px; border-radius:999px; border:1px solid var(--paper-line);
+    background:var(--paper-dark); color:var(--ink-soft); cursor:pointer;
+  }
+  .tally-tab.active{ background:var(--oxblood); border-color:var(--oxblood); color:#fff; }
+  table.tally{ width:100%; border-collapse:collapse; font-size:13.5px; }
+  table.tally th, table.tally td{ text-align:left; padding:5px 8px; border-bottom:1px solid var(--paper-line); }
+  table.tally th{ color:var(--ink-soft); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.03em; }
+  table.tally td.num{ text-align:right; font-family:'Roboto Mono',monospace; }
+  .empty-note{ color:var(--ink-faint); font-size:13px; font-style:italic; margin:6px 0; }
+
+  .btn-row{ display:flex; gap:10px; flex-wrap:wrap; margin-top:6px; }
+  button.primary{
+    background:var(--oxblood); color:#fff; border:none; border-radius:8px; padding:10px 18px;
+    font-size:14px; font-weight:600; cursor:pointer;
+  }
+  button.primary:disabled{ background:var(--ink-faint); cursor:not-allowed; }
+  button.primary.ghost{ background:none; border:1px solid var(--oxblood); color:var(--oxblood); }
+  #exportStatus{ font-size:12px; color:var(--ink-soft); align-self:center; }
+
+  .page-foot{ text-align:center; font-size:11px; color:var(--ink-faint); margin-top:18px; }
+  .page-foot a{ color:var(--ink-faint); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="page-head">
+    <div class="suite-brand">
+      <span class="shapes" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a2e2e" stroke-width="2"><polygon points="12,3 21,20 3,20"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a2e2e" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a2e2e" stroke-width="2"><rect x="4" y="4" width="16" height="16"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a2e2e" stroke-width="2"><polygon points="12,2 22,12 12,22 2,12"/></svg>
+      </span>
+      <h1>Simple Totals</h1>
+      <a href="instructions.html" style="margin-left:auto; font-size:12.5px; font-weight:600; color:var(--ink-soft); text-decoration:none;">Instructions</a>
+    </div>
+    <p class="tagline">Load any number of finished singings — Simple Minutes exports, Simple Compile source files, or Master CSVs from the full Minutes app — and get one combined record plus real totals: what's been sung most, from which books, and by which leaders.</p>
+    <p class="backlink">Nothing here edits anything. To fix a name or a page before totaling it, do that first in the full <a href="https://singlouddotorg.github.io/minutes/" target="_blank" rel="noopener">Minutes</a> app.</p>
+  </header>
+
+  <div class="card">
+    <h2 class="card-title">1. Add singings</h2>
+    <p class="card-desc">Choose or drop as many CSV files as you like, one at a time or all at once. Each is read once and its songs added to the running totals below — nothing is uploaded anywhere.</p>
+    <div class="file-drop" id="fileDrop">
+      <p><strong>Click to choose files</strong> or drop CSVs here — you can select several at once.</p>
+      <input type="file" id="fileInput" accept=".csv,text/csv" multiple>
+    </div>
+    <div id="importStatusRow" style="display:none;font-size:12.5px;color:var(--ink-soft);margin-bottom:4px;"><span id="importStatus"></span></div>
+    <table class="loaded" id="loadedTable" style="display:none;">
+      <thead><tr><th>Event</th><th>Date</th><th>Location</th><th class="num">Songs</th><th>File</th><th></th></tr></thead>
+      <tbody id="loadedBody"></tbody>
+    </table>
+    <p class="empty-note" id="loadedEmptyNote">No singings loaded yet.</p>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">2. Totals</h2>
+    <div class="overview-grid" id="overviewGrid"></div>
+
+    <div class="tally-tabs" id="tallyTabs">
+      <button class="tally-tab active" data-tab="frequency">Song frequency</button>
+      <button class="tally-tab" data-tab="book">By book</button>
+      <button class="tally-tab" data-tab="leader">By leader</button>
+    </div>
+    <div id="tallyFrequency"></div>
+    <div id="tallyBook" style="display:none;"></div>
+    <div id="tallyLeader" style="display:none;"></div>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">3. Export</h2>
+    <p class="card-desc">One combined CSV holding every song from every singing loaded — a real Schema 5 file, reopenable in the full Minutes app or this one later. The totals CSV holds the same three tables shown above, in one file with a section per table.</p>
+    <div class="btn-row">
+      <button class="primary" id="downloadCombinedBtn" disabled>Download combined CSV</button>
+      <button class="primary ghost" id="downloadTotalsBtn" disabled>Download totals CSV</button>
+      <span id="exportStatus"></span>
+    </div>
+  </div>
+
+  <p class="page-foot" id="totalsVersionFooter">Simple Totals</p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var parseCSV = EZMinutesShared.parseCSV;
+  var csvCell = EZMinutesShared.csvCell;
+  var escapeHtml = EZMinutesShared.escapeHtml;
+
+  var COMBINED_HEADER = ["Schema Version","Order of entry","Record Type","Session Label","Session ID","Metadata Field","Metadata Value","Event","Date","Location","Chair","Vice-Chair","Secretary","Treasurer","Arranger(s)","Chaplain(s)","Memorial Lesson Leader","Book","Edition Code","Leader(s)","Canonical Leader(s)","Page","Song","Tag","Notes","Marker","Timestamp ISO","Time entered","Series Code","Event ID","Previous Event ID","Status"];
+
+  function col(header, row, name){
+    var i = header.indexOf(name);
+    return (i === -1 || i >= row.length) ? "" : (row[i] || "").trim();
+  }
+
+  function bookDisplayName(codeOrText){
+    if(!codeOrText) return "(no book)";
+    var e = EZ_MINUTES_TUNEBOOKS.books && EZ_MINUTES_TUNEBOOKS.books[codeOrText];
+    if(e && e.commonName) return e.commonName;
+    return codeOrText;
+  }
+
+  // ---------------- parsing a single uploaded file into song rows + a summary ----------------
+  // Deliberately simple compared to Minutes' own importer: this app only ever needs to know
+  // "is this a song, and what does it say" - it doesn't need session boundaries, markers,
+  // business-meeting detection, or any of the narrative-generation apparatus those apps
+  // carry. Record Type is trusted directly since every real Schema 5 export (Simple
+  // Minutes, Simple Compile's source files, and the full Minutes app) writes it reliably;
+  // the one fallback below covers a hand-edited file that dropped the column but still has
+  // real song data in it.
+  function parseFile(text, filename){
+    var rows = parseCSV(text);
+    if(!rows.length) return { error: "empty file" };
+    var header = rows[0];
+    var hasRecordType = header.indexOf("Record Type") !== -1;
+    if(!hasRecordType && header.indexOf("Event") === -1){
+      return { error: "doesn't look like a Singing Record CSV" };
+    }
+    var summary = { event: "", date: "", location: "", seriesCode: "", eventId: "", previousEventId: "" };
+    var songs = [];
+    for(var i = 1; i < rows.length; i++){
+      var row = rows[i];
+      if(!row.length) continue;
+      if(!summary.event) summary.event = col(header, row, "Event");
+      if(!summary.date) summary.date = col(header, row, "Date");
+      if(!summary.location) summary.location = col(header, row, "Location");
+      if(!summary.seriesCode) summary.seriesCode = col(header, row, "Series Code");
+      if(!summary.eventId) summary.eventId = col(header, row, "Event ID");
+      if(!summary.previousEventId) summary.previousEventId = col(header, row, "Previous Event ID");
+
+      var recordType = col(header, row, "Record Type").toLowerCase();
+      var page = col(header, row, "Page");
+      var title = col(header, row, "Song");
+      var marker = col(header, row, "Marker");
+      var isSong = recordType === "song" || (!recordType && !marker && (page || title));
+      if(!isSong) continue;
+
+      songs.push({
+        book: col(header, row, "Book") || col(header, row, "Edition Code"),
+        editionCode: col(header, row, "Edition Code") || col(header, row, "Book"),
+        leader: col(header, row, "Canonical Leader(s)") || col(header, row, "Leader(s)"),
+        page: page,
+        title: title,
+        tag: col(header, row, "Tag"),
+        raw: row
+      });
+    }
+    if(!summary.event && !summary.date) return { error: "no Event or Date column found" };
+    return { summary: summary, songs: songs, header: header, rows: rows.slice(1), filename: filename };
+  }
+
+  // ---------------- app state ----------------
+  var loadedFiles = []; // { id, filename, summary, songs, isDuplicate, includeAnyway }
+  var nextId = 1;
+  var activeTallyTab = "frequency";
+
+  var fileDrop = document.getElementById("fileDrop");
+  var fileInput = document.getElementById("fileInput");
+  var importStatusRow = document.getElementById("importStatusRow");
+  var importStatus = document.getElementById("importStatus");
+  var loadedTable = document.getElementById("loadedTable");
+  var loadedBody = document.getElementById("loadedBody");
+  var loadedEmptyNote = document.getElementById("loadedEmptyNote");
+  var overviewGrid = document.getElementById("overviewGrid");
+  var downloadCombinedBtn = document.getElementById("downloadCombinedBtn");
+  var downloadTotalsBtn = document.getElementById("downloadTotalsBtn");
+  var exportStatus = document.getElementById("exportStatus");
+
+  function duplicateKeyFor(summary){
+    if(summary.eventId) return "id:" + summary.eventId;
+    return "ed:" + (summary.event||"").trim().toLowerCase() + "|" + (summary.date||"");
+  }
+
+  function findExistingDuplicate(summary, excludeId){
+    var key = duplicateKeyFor(summary);
+    return loadedFiles.find(function(f){
+      return f.id !== excludeId && !f.isDuplicateSkipped && duplicateKeyFor(f.summary) === key;
+    });
+  }
+
+  function handleFiles(fileList){
+    var files = Array.prototype.slice.call(fileList || []);
+    if(!files.length) return;
+    var pending = files.length, errors = [];
+    files.forEach(function(file){
+      var reader = new FileReader();
+      reader.onload = function(){
+        var parsed = parseFile(String(reader.result || ""), file.name);
+        if(parsed.error){
+          errors.push(file.name + ": " + parsed.error);
+        } else {
+          var entry = {
+            id: nextId++,
+            filename: parsed.filename,
+            summary: parsed.summary,
+            songs: parsed.songs,
+            header: parsed.header,
+            rows: parsed.rows,
+            isDuplicateSkipped: false
+          };
+          var dup = findExistingDuplicate(entry.summary, entry.id);
+          entry.duplicateOfId = dup ? dup.id : null;
+          loadedFiles.push(entry);
+        }
+        pending--;
+        if(pending === 0) finishImport(errors);
+      };
+      reader.onerror = function(){
+        errors.push(file.name + ": couldn't read file");
+        pending--;
+        if(pending === 0) finishImport(errors);
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  function finishImport(errors){
+    if(errors.length){
+      importStatusRow.style.display = "block";
+      importStatus.textContent = errors.length === 1 ? errors[0] : (errors.length + " files couldn't be read: " + errors.join("; "));
+      importStatus.style.color = "var(--oxblood)";
+    } else {
+      importStatusRow.style.display = "none";
+    }
+    renderAll();
+  }
+
+  fileDrop.addEventListener("click", function(e){ if(e.target !== fileInput) fileInput.click(); });
+  fileInput.addEventListener("change", function(){ handleFiles(fileInput.files); fileInput.value = ""; });
+  ["dragenter","dragover"].forEach(function(evt){
+    fileDrop.addEventListener(evt, function(e){ e.preventDefault(); fileDrop.classList.add("drag"); });
+  });
+  ["dragleave","drop"].forEach(function(evt){
+    fileDrop.addEventListener(evt, function(e){ e.preventDefault(); fileDrop.classList.remove("drag"); });
+  });
+  fileDrop.addEventListener("drop", function(e){
+    if(e.dataTransfer && e.dataTransfer.files) handleFiles(e.dataTransfer.files);
+  });
+
+  function removeFile(id){
+    loadedFiles = loadedFiles.filter(function(f){ return f.id !== id; });
+    // Re-evaluate duplicate flags now that the set has changed - removing the file that
+    // something else was flagged against should clear that flag too.
+    loadedFiles.forEach(function(f){
+      var dup = findExistingDuplicate(f.summary, f.id);
+      f.duplicateOfId = dup ? dup.id : null;
+    });
+    renderAll();
+  }
+
+  function includeAnyway(id){
+    var f = loadedFiles.find(function(x){ return x.id === id; });
+    if(f){ f.isDuplicateSkipped = true; f.duplicateOfId = null; }
+    renderAll();
+  }
+
+  function activeSongFiles(){
+    // A flagged duplicate is loaded (visible, removable) but excluded from totals unless
+    // explicitly included, so re-adding the same singing twice by accident doesn't quietly
+    // double every count - the kind of mistake that's invisible until the totals look wrong
+    // for reasons nobody can trace back to a single file.
+    return loadedFiles.filter(function(f){ return !f.duplicateOfId; });
+  }
+
+  function renderLoadedTable(){
+    if(!loadedFiles.length){
+      loadedTable.style.display = "none";
+      loadedEmptyNote.style.display = "block";
+      return;
+    }
+    loadedTable.style.display = "table";
+    loadedEmptyNote.style.display = "none";
+    var sorted = loadedFiles.slice().sort(function(a,b){ return (a.summary.date||"").localeCompare(b.summary.date||""); });
+    loadedBody.innerHTML = sorted.map(function(f){
+      var dupNote = f.duplicateOfId
+        ? '<div class="dup-note">Looks like a duplicate of an already-loaded singing.<button class="add-anyway-btn" data-include="' + f.id + '">Include anyway</button></div>'
+        : "";
+      return '<tr class="' + (f.duplicateOfId ? "row-dup" : "") + '">' +
+        '<td>' + escapeHtml(f.summary.event || "(no event name)") + dupNote + '</td>' +
+        '<td>' + escapeHtml(f.summary.date || "—") + '</td>' +
+        '<td>' + escapeHtml(f.summary.location || "—") + '</td>' +
+        '<td class="num">' + f.songs.length + '</td>' +
+        '<td>' + escapeHtml(f.filename) + '</td>' +
+        '<td><button class="remove-btn" data-remove="' + f.id + '">Remove</button></td>' +
+        '</tr>';
+    }).join("");
+    Array.prototype.forEach.call(loadedBody.querySelectorAll("[data-remove]"), function(btn){
+      btn.addEventListener("click", function(){ removeFile(parseInt(btn.dataset.remove, 10)); });
+    });
+    Array.prototype.forEach.call(loadedBody.querySelectorAll("[data-include]"), function(btn){
+      btn.addEventListener("click", function(){ includeAnyway(parseInt(btn.dataset.include, 10)); });
+    });
+  }
+
+  function renderOverview(){
+    var files = activeSongFiles();
+    var allSongs = [];
+    files.forEach(function(f){ allSongs = allSongs.concat(f.songs); });
+    var dates = files.map(function(f){ return f.summary.date; }).filter(Boolean).sort();
+    var span = dates.length ? (dates[0] === dates[dates.length-1] ? dates[0] : (dates[0] + " – " + dates[dates.length-1])) : "—";
+    overviewGrid.innerHTML =
+      '<div class="stat"><div class="n">' + files.length + '</div><div class="lbl">Singings</div></div>' +
+      '<div class="stat"><div class="n">' + allSongs.length + '</div><div class="lbl">Songs total</div></div>' +
+      '<div class="stat"><div class="n" style="font-size:16px;line-height:1.6;">' + escapeHtml(span) + '</div><div class="lbl">Date range</div></div>';
+    return allSongs;
+  }
+
+  function renderTallyFrequency(allSongs){
+    var byKey = {};
+    allSongs.forEach(function(s){
+      var bookName = bookDisplayName(s.book);
+      var title = s.title || "(untitled)";
+      var key = title + "" + bookName;
+      if(!byKey[key]) byKey[key] = { title: title, book: bookName, page: s.page, count: 0 };
+      byKey[key].count++;
+    });
+    var list = Object.keys(byKey).map(function(k){ return byKey[k]; })
+      .sort(function(a,b){ return b.count - a.count || a.title.localeCompare(b.title); });
+    var el = document.getElementById("tallyFrequency");
+    if(!list.length){ el.innerHTML = '<p class="empty-note">No songs loaded yet.</p>'; return; }
+    el.innerHTML = '<table class="tally"><thead><tr><th>Song</th><th>Book</th><th>Page</th><th class="num">Times sung</th></tr></thead><tbody>' +
+      list.map(function(r){
+        return '<tr><td>' + escapeHtml(r.title) + '</td><td>' + escapeHtml(r.book) + '</td><td>' + escapeHtml(r.page || "—") + '</td><td class="num">' + r.count + '</td></tr>';
+      }).join("") + '</tbody></table>';
+  }
+
+  function renderTallyBook(allSongs){
+    var byBook = {};
+    allSongs.forEach(function(s){
+      var name = bookDisplayName(s.book);
+      byBook[name] = (byBook[name] || 0) + 1;
+    });
+    var names = Object.keys(byBook).sort(function(a,b){ return byBook[b] - byBook[a] || a.localeCompare(b); });
+    var el = document.getElementById("tallyBook");
+    if(!names.length){ el.innerHTML = '<p class="empty-note">No songs loaded yet.</p>'; return; }
+    el.innerHTML = '<table class="tally"><thead><tr><th>Book</th><th class="num">Songs sung</th></tr></thead><tbody>' +
+      names.map(function(n){ return '<tr><td>' + escapeHtml(n) + '</td><td class="num">' + byBook[n] + '</td></tr>'; }).join("") +
+      '</tbody></table>';
+  }
+
+  function renderTallyLeader(allSongs){
+    var byLeader = {};
+    allSongs.forEach(function(s){
+      var raw = s.leader || "";
+      var names = raw.split(",").map(function(n){ return n.trim(); }).filter(Boolean);
+      if(!names.length) names = ["(no leader listed)"];
+      names.forEach(function(name){ byLeader[name] = (byLeader[name] || 0) + 1; });
+    });
+    var names = Object.keys(byLeader).sort(function(a,b){ return byLeader[b] - byLeader[a] || a.localeCompare(b); });
+    var el = document.getElementById("tallyLeader");
+    if(!names.length){ el.innerHTML = '<p class="empty-note">No songs loaded yet.</p>'; return; }
+    el.innerHTML = '<table class="tally"><thead><tr><th>Leader</th><th class="num">Songs led</th></tr></thead><tbody>' +
+      names.map(function(n){ return '<tr><td>' + escapeHtml(n) + '</td><td class="num">' + byLeader[n] + '</td></tr>'; }).join("") +
+      '</tbody></table>';
+  }
+
+  document.getElementById("tallyTabs").addEventListener("click", function(e){
+    var btn = e.target.closest(".tally-tab");
+    if(!btn) return;
+    activeTallyTab = btn.dataset.tab;
+    Array.prototype.forEach.call(document.querySelectorAll(".tally-tab"), function(b){ b.classList.toggle("active", b === btn); });
+    document.getElementById("tallyFrequency").style.display = activeTallyTab === "frequency" ? "block" : "none";
+    document.getElementById("tallyBook").style.display = activeTallyTab === "book" ? "block" : "none";
+    document.getElementById("tallyLeader").style.display = activeTallyTab === "leader" ? "block" : "none";
+  });
+
+  function renderAll(){
+    renderLoadedTable();
+    var allSongs = renderOverview();
+    renderTallyFrequency(allSongs);
+    renderTallyBook(allSongs);
+    renderTallyLeader(allSongs);
+    var hasSongs = allSongs.length > 0;
+    downloadCombinedBtn.disabled = !hasSongs;
+    downloadTotalsBtn.disabled = !hasSongs;
+  }
+
+  // ---------------- export ----------------
+  function buildCombinedCSV(){
+    var out = [COMBINED_HEADER];
+    activeSongFiles().forEach(function(f){
+      var hIdx = {};
+      f.header.forEach(function(h, i){ hIdx[h] = i; });
+      f.rows.forEach(function(row){
+        var recordType = (hIdx["Record Type"] !== undefined ? row[hIdx["Record Type"]] : "") || "";
+        if(recordType.toLowerCase() !== "song") return; // combined file is songs only - the whole point is one flat list to total, not a re-playable session log
+        out.push(COMBINED_HEADER.map(function(h){
+          var i = hIdx[h];
+          return (i !== undefined && row[i] !== undefined) ? row[i] : "";
+        }));
+      });
+    });
+    return "﻿" + out.map(function(r){ return r.map(csvCell).join(","); }).join("\r\n") + "\r\n";
+  }
+
+  function buildTotalsCSV(allSongs){
+    var lines = [];
+    lines.push(["Song frequency"]);
+    lines.push(["Song","Book","Page","Times sung"]);
+    var byKey = {};
+    allSongs.forEach(function(s){
+      var bookName = bookDisplayName(s.book);
+      var title = s.title || "(untitled)";
+      var key = title + "" + bookName;
+      if(!byKey[key]) byKey[key] = { title: title, book: bookName, page: s.page, count: 0 };
+      byKey[key].count++;
+    });
+    Object.keys(byKey).map(function(k){ return byKey[k]; })
+      .sort(function(a,b){ return b.count - a.count || a.title.localeCompare(b.title); })
+      .forEach(function(r){ lines.push([r.title, r.book, r.page || "", r.count]); });
+
+    lines.push([]);
+    lines.push(["By book"]);
+    lines.push(["Book","Songs sung"]);
+    var byBook = {};
+    allSongs.forEach(function(s){ var n = bookDisplayName(s.book); byBook[n] = (byBook[n]||0)+1; });
+    Object.keys(byBook).sort(function(a,b){ return byBook[b]-byBook[a] || a.localeCompare(b); })
+      .forEach(function(n){ lines.push([n, byBook[n]]); });
+
+    lines.push([]);
+    lines.push(["By leader"]);
+    lines.push(["Leader","Songs led"]);
+    var byLeader = {};
+    allSongs.forEach(function(s){
+      var names = (s.leader||"").split(",").map(function(n){return n.trim();}).filter(Boolean);
+      if(!names.length) names = ["(no leader listed)"];
+      names.forEach(function(n){ byLeader[n] = (byLeader[n]||0)+1; });
+    });
+    Object.keys(byLeader).sort(function(a,b){ return byLeader[b]-byLeader[a] || a.localeCompare(b); })
+      .forEach(function(n){ lines.push([n, byLeader[n]]); });
+
+    return "﻿" + lines.map(function(r){ return r.map(csvCell).join(","); }).join("\r\n") + "\r\n";
+  }
+
+  function download(filename, content){
+    var blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+  }
+
+  downloadCombinedBtn.addEventListener("click", function(){
+    download("simple-totals-combined-" + new Date().toISOString().slice(0,10) + ".csv", buildCombinedCSV());
+    exportStatus.textContent = "Combined CSV downloaded.";
+  });
+  downloadTotalsBtn.addEventListener("click", function(){
+    var allSongs = [];
+    activeSongFiles().forEach(function(f){ allSongs = allSongs.concat(f.songs); });
+    download("simple-totals-summary-" + new Date().toISOString().slice(0,10) + ".csv", buildTotalsCSV(allSongs));
+    exportStatus.textContent = "Totals CSV downloaded.";
+  });
+
+  // Exposed for tests: a real jsdom smoke test can hand a CSV's text straight to the same
+  // parser this page uses, rather than driving file input events, matching the bridge
+  // pattern already used by Simple Compile's own tests.
+  window.__simpleTotalsHandleFiles = function(fileObjs){
+    // fileObjs: [{ name, text }] - a lightweight stand-in for real File objects that still
+    // exercises the exact same parseFile()/dedup/render path a real drop or click would.
+    var pending = fileObjs.length, errors = [];
+    fileObjs.forEach(function(fo){
+      var parsed = parseFile(fo.text, fo.name);
+      if(parsed.error){
+        errors.push(fo.name + ": " + parsed.error);
+      } else {
+        var entry = {
+          id: nextId++, filename: parsed.filename, summary: parsed.summary, songs: parsed.songs,
+          header: parsed.header, rows: parsed.rows, isDuplicateSkipped: false
+        };
+        var dup = findExistingDuplicate(entry.summary, entry.id);
+        entry.duplicateOfId = dup ? dup.id : null;
+        loadedFiles.push(entry);
+      }
+    });
+    finishImport(errors);
+  };
+  window.__simpleTotalsState = function(){ return { loadedFiles: loadedFiles }; };
+  window.__simpleTotalsBuildCombinedCSV = buildCombinedCSV;
+  window.__simpleTotalsBuildTotalsCSV = function(){
+    var allSongs = [];
+    activeSongFiles().forEach(function(f){ allSongs = allSongs.concat(f.songs); });
+    return buildTotalsCSV(allSongs);
+  };
+
+  renderAll();
+
+  document.getElementById("totalsVersionFooter").textContent = "Simple Totals · Version " + SIMPLE_TOTALS_VERSION;
+})();
+</script>
+</body>
+</html>

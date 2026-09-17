@@ -80,6 +80,11 @@
     font-size:11px; padding:2px 8px; cursor:pointer;
   }
   .remove-btn:hover{ border-color:var(--oxblood); color:var(--oxblood); }
+  .reset-btn{
+    background:none; border:1px solid var(--paper-line); border-radius:6px; color:var(--ink-soft);
+    font-size:12px; font-weight:600; padding:5px 12px; cursor:pointer;
+  }
+  .reset-btn:hover{ border-color:var(--oxblood); color:var(--oxblood); }
   .add-anyway-btn{
     background:none; border:none; color:var(--oxblood); font-size:12px; text-decoration:underline;
     cursor:pointer; padding:0; margin-left:6px;
@@ -134,7 +139,10 @@
   </header>
 
   <div class="card">
-    <h2 class="card-title">1. Add singings</h2>
+    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+      <h2 class="card-title" style="margin:0 0 10px;">1. Add singings</h2>
+      <button type="button" class="reset-btn" id="resetAllBtn" style="display:none;">Reset all</button>
+    </div>
     <p class="card-desc">Choose or drop as many CSV files as you like, one at a time or all at once. Each is read once and its songs added to the running totals below — nothing is uploaded anywhere.</p>
     <div class="file-drop" id="fileDrop">
       <p><strong>Click to choose files</strong> or drop CSVs here — you can select several at once.</p>
@@ -261,6 +269,7 @@
   var downloadCombinedBtn = document.getElementById("downloadCombinedBtn");
   var downloadTotalsBtn = document.getElementById("downloadTotalsBtn");
   var exportStatus = document.getElementById("exportStatus");
+  var resetAllBtn = document.getElementById("resetAllBtn");
 
   function duplicateKeyFor(summary){
     if(summary.eventId) return "id:" + summary.eventId;
@@ -350,6 +359,18 @@
     renderAll();
   }
 
+  function resetAll(){
+    // A confirm here, not a silent wipe - unlike removing one file (a targeted, reversible-
+    // by-reloading-it action), this discards everything loaded in one step, and nothing on
+    // this page is saved anywhere to recover it from afterward.
+    if(loadedFiles.length && !window.confirm("Remove all " + loadedFiles.length + " loaded singing" + (loadedFiles.length === 1 ? "" : "s") + " and start over?")) return;
+    loadedFiles = [];
+    importStatusRow.style.display = "none";
+    exportStatus.textContent = "";
+    renderAll();
+  }
+  resetAllBtn.addEventListener("click", resetAll);
+
   function activeSongFiles(){
     // A flagged duplicate is loaded (visible, removable) but excluded from totals unless
     // explicitly included, so re-adding the same singing twice by accident doesn't quietly
@@ -359,6 +380,7 @@
   }
 
   function renderLoadedTable(){
+    resetAllBtn.style.display = loadedFiles.length ? "inline-block" : "none";
     if(!loadedFiles.length){
       loadedTable.style.display = "none";
       loadedEmptyNote.style.display = "block";
@@ -579,6 +601,14 @@
     var allSongs = [];
     activeSongFiles().forEach(function(f){ allSongs = allSongs.concat(f.songs); });
     return buildTotalsCSV(allSongs);
+  };
+  // Bypasses the confirm() prompt, same as a test driving the real Reset button would need
+  // to stub window.confirm first - this is just the more direct route to the same code path.
+  window.__simpleTotalsResetNoConfirm = function(){
+    loadedFiles = [];
+    importStatusRow.style.display = "none";
+    exportStatus.textContent = "";
+    renderAll();
   };
 
   renderAll();

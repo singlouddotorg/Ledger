@@ -8,7 +8,7 @@
      record across dozens of occurrences - every song sung, how often, by whom, from which
      book - without hand-merging CSVs in a spreadsheet. This app does exactly that and
      nothing else: load any number of real Schema 5 Singing Records (a Simple Minutes
-     export, a Simple Compile source file, or a Master CSV from the full Minutes app - they
+     export, a Simple Compile source file, or a Master CSV from the full Secretary app - they
      are all the same format), and it produces two things: one combined CSV holding every
      song row from every singing loaded, and a set of totals (song frequency, by book, by
      leader) shown on screen and downloadable as their own CSV. No editing surface at all -
@@ -136,8 +136,8 @@
       <h1>Singing Ledger</h1>
       <a href="instructions.html" style="margin-left:auto; font-size:12.5px; font-weight:600; color:var(--ink-soft); text-decoration:none;">Instructions</a>
     </div>
-    <p class="tagline">Load any number of finished singings — Simple Minutes exports, Simple Compile source files, or Master CSVs from the full Minutes app — and get one combined record plus real totals: what's been sung most, from which books, and by which leaders.</p>
-    <p class="backlink">Nothing here edits anything. To fix a name or a page before totaling it, do that first in the full <a href="https://singlouddotorg.github.io/minutes/" target="_blank" rel="noopener">Minutes</a> app.</p>
+    <p class="tagline">Load any number of finished singings — Simple Minutes exports, Simple Compile source files, or Master CSVs from the full Secretary app — and get one combined record plus real totals: what's been sung most, from which books, and by which leaders.</p>
+    <p class="backlink">Nothing here edits anything. To fix a name or a page before totaling it, do that first in the full <a href="https://singlouddotorg.github.io/minutes/" target="_blank" rel="noopener">Secretary</a> app.</p>
   </header>
 
   <div class="card">
@@ -174,7 +174,7 @@
 
   <div class="card">
     <h2 class="card-title">3. Export</h2>
-    <p class="card-desc">One combined CSV holding every song from every singing loaded — a real Schema 5 file, reopenable in the full Minutes app or this one later. The totals CSV holds the same three tables shown above, in one file with a section per table.</p>
+    <p class="card-desc">One combined CSV holding every song from every singing loaded — a real Schema 5 file, reopenable in the full Secretary app or this one later. The totals CSV holds the same three tables shown above, in one file with a section per table.</p>
     <div class="btn-row">
       <button class="primary" id="downloadCombinedBtn" disabled>Download combined CSV</button>
       <button class="primary ghost" id="downloadTotalsBtn" disabled>Download totals CSV</button>
@@ -207,11 +207,11 @@
   }
 
   // ---------------- parsing a single uploaded file into song rows + a summary ----------------
-  // Deliberately simple compared to Minutes' own importer: this app only ever needs to know
+  // Deliberately simple compared to Secretary's own importer: this app only ever needs to know
   // "is this a song, and what does it say" - it doesn't need session boundaries, markers,
   // business-meeting detection, or any of the narrative-generation apparatus those apps
   // carry. Record Type is trusted directly since every real Schema 5 export (Simple
-  // Minutes, Simple Compile's source files, and the full Minutes app) writes it reliably;
+  // Minutes, Simple Compile's source files, and the full Secretary app) writes it reliably;
   // the one fallback below covers a hand-edited file that dropped the column but still has
   // real song data in it.
   function parseFile(text, filename){

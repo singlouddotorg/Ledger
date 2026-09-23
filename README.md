@@ -3,7 +3,7 @@
 **Version 0.1** — new, not yet in wide use.
 
 Load any number of finished singings — Capture exports, Compile source
-files, or Master CSVs from the full Minutes app — and get one combined record plus real
+files, or Master CSVs from the full Secretary app — and get one combined record plus real
 totals across all of them: what's been sung most, from which books, and by which leaders.
 Built for anyone keeping a master record across a regular singing's many occurrences,
 without hand-merging CSVs in a spreadsheet.
@@ -15,10 +15,10 @@ uses. Nothing to install, no server, no build step.
 
 | App | What it does | Status |
 |---|---|---|
-| [**Minutes**](https://github.com/singlouddotorg/minutes) | Log a singing as it happens, then turn that log into publishable minutes — with full editing. | Beta |
-| [**Tunebooks**](https://github.com/singlouddotorg/tunebooks) | Curate the shared tunebook data — editions, page indexes, Level 3 scholarly files. | Beta |
-| [**Capture**](https://github.com/singlouddotorg/Simple-Minutes) | A phone-sized logger: page numbers only, no names. Its files import straight into Minutes, Compile, and Singing Ledger. | 1.0 release |
-| [**Compile**](https://github.com/singlouddotorg/Simple-Compile) | A one-page, no-editing version of Minutes: open a CSV, get readable minutes back. | 1.0 release |
+| [**Secretary**](https://github.com/singlouddotorg/Secretary) | Log a singing as it happens, then turn that log into publishable minutes — with full editing. | Beta |
+| [**Bibliographer**](https://github.com/singlouddotorg/Bibliographer) | Curate the shared tunebook data — editions, page indexes, Level 3 scholarly files. | Beta |
+| [**Capture**](https://github.com/singlouddotorg/Simple-Minutes) | A phone-sized logger: page numbers only, no names. Its files import straight into Secretary, Compile, and Singing Ledger. | 1.0 release |
+| [**Compile**](https://github.com/singlouddotorg/Simple-Compile) | A one-page, no-editing version of Secretary: open a CSV, get readable minutes back. | 1.0 release |
 | **Singing Ledger** | This app. | New (0.1) |
 | [**Tunebook Registry**](https://github.com/singlouddotorg/Tunebook-Registry) | The published tunebook data the others read. | 1.0 release |
 
@@ -27,7 +27,7 @@ uses. Nothing to install, no server, no build step.
 Someone running a regular singing — a monthly local sing, an annual convention — often
 wants, after a year or a decade of occurrences, a real answer to "what have we actually
 sung the most," "how many times has this song come up," or "who's led the most songs at
-our singing." Every individual singing already has this in miniature (Minutes shows a
+our singing." Every individual singing already has this in miniature (Secretary shows a
 tally for one singing's own Capture log), but nothing before this combined it across many
 singings without manually pasting rows together in a spreadsheet — a real hassle once
 there are dozens of files, and an easy way to double-count or miss one by hand.
@@ -39,7 +39,7 @@ adds them all up.
 
 1. Open `index.html` and choose or drop in as many CSV files as you like, all at once or
    over several visits — Capture exports, Compile source files, and Master
-   CSVs from Minutes can all be mixed together.
+   CSVs from Secretary can all be mixed together.
 2. Check the loaded-singings list for anything flagged as a likely duplicate (the same
    singing loaded twice, most often by accident) — a flagged file stays visible but is left
    out of the totals until you tap **Include anyway**.
@@ -55,7 +55,7 @@ adds them all up.
 Singing Ledger has no editing surface at all — it only reads what's already in each file and
 adds it up. Every file is read once, in the browser; nothing is sent anywhere, and nothing
 is written to browser storage between visits. If a name or page genuinely needs correcting
-before it's totaled, do that first in the full [Minutes](https://github.com/singlouddotorg/Secretary) app, then load the
+before it's totaled, do that first in the full [Secretary](https://github.com/singlouddotorg/Secretary) app, then load the
 corrected file here.
 
 ## Where the Songbook Data Comes From
